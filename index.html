@@ -1,0 +1,1011 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>ObjectSense — Real-Time Counting System</title>
+
+  <!-- Chart.js for drawing graphs -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+
+  <style>
+    /* ──────────────────────────────────────────────
+       GLOBAL STYLES & THEME
+    ────────────────────────────────────────────── */
+    @import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;600&display=swap');
+
+    :root {
+      --bg-dark:    #0d1117;
+      --bg-card:    #161b22;
+      --bg-input:   #21262d;
+      --border:     #30363d;
+      --accent:     #1f6feb;
+      --accent-2:   #388bfd;
+      --green:      #3fb950;
+      --red:        #f85149;
+      --yellow:     #e3b341;
+      --purple:     #a371f7;
+      --cyan:       #39d353;
+      --orange:     #f0883e;
+      --text-main:  #e6edf3;
+      --text-muted: #8b949e;
+      --text-dim:   #484f58;
+    }
+
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      font-family: 'Space Grotesk', sans-serif;
+      background: var(--bg-dark);
+      color: var(--text-main);
+      min-height: 100vh;
+    }
+
+    /* ──────────────────────────────────────────────
+       HEADER / NAV
+    ────────────────────────────────────────────── */
+    header {
+      background: var(--bg-card);
+      border-bottom: 1px solid var(--border);
+      padding: 0 24px;
+      height: 56px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      position: sticky;
+      top: 0;
+      z-index: 100;
+    }
+
+    .logo {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      font-size: 18px;
+      font-weight: 700;
+      letter-spacing: -0.5px;
+    }
+    .logo-dot {
+      width: 10px; height: 10px;
+      background: var(--accent-2);
+      border-radius: 50%;
+      animation: pulse 2s infinite;
+    }
+    @keyframes pulse {
+      0%, 100% { opacity: 1; transform: scale(1); }
+      50%       { opacity: 0.5; transform: scale(1.3); }
+    }
+
+    .header-status {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 13px;
+      color: var(--text-muted);
+    }
+    .status-dot {
+      width: 8px; height: 8px;
+      border-radius: 50%;
+      background: var(--text-dim);
+    }
+    .status-dot.live { background: var(--green); animation: pulse 1.5s infinite; }
+
+    nav {
+      display: flex;
+      gap: 4px;
+    }
+    .nav-btn {
+      padding: 6px 16px;
+      border: 1px solid transparent;
+      background: transparent;
+      color: var(--text-muted);
+      border-radius: 6px;
+      font-size: 14px;
+      font-family: inherit;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    .nav-btn:hover, .nav-btn.active {
+      background: var(--bg-input);
+      border-color: var(--border);
+      color: var(--text-main);
+    }
+
+    /* ──────────────────────────────────────────────
+       LAYOUT
+    ────────────────────────────────────────────── */
+    main {
+      padding: 20px 24px;
+      max-width: 1600px;
+      margin: 0 auto;
+    }
+
+    /* Section pages */
+    .page { display: none; }
+    .page.active { display: block; }
+
+    /* ──────────────────────────────────────────────
+       CAMERA CONNECT BAR
+    ────────────────────────────────────────────── */
+    .connect-bar {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 20px;
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 12px 16px;
+    }
+    .connect-bar label {
+      font-size: 13px;
+      color: var(--text-muted);
+      white-space: nowrap;
+    }
+    .connect-bar input {
+      flex: 1;
+      background: var(--bg-input);
+      border: 1px solid var(--border);
+      color: var(--text-main);
+      border-radius: 6px;
+      padding: 8px 12px;
+      font-size: 13px;
+      font-family: 'JetBrains Mono', monospace;
+    }
+    .connect-bar input:focus { outline: none; border-color: var(--accent); }
+
+    .btn {
+      padding: 8px 20px;
+      border: none;
+      border-radius: 6px;
+      font-size: 13px;
+      font-family: inherit;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.2s;
+      white-space: nowrap;
+    }
+    .btn-primary { background: var(--accent); color: #fff; }
+    .btn-primary:hover { background: var(--accent-2); }
+    .btn-danger  { background: var(--red); color: #fff; }
+    .btn-danger:hover { filter: brightness(1.1); }
+    .btn-ghost {
+      background: var(--bg-input);
+      border: 1px solid var(--border);
+      color: var(--text-main);
+    }
+    .btn-ghost:hover { border-color: var(--accent); }
+    .btn-success { background: var(--green); color: #fff; }
+    .btn-success:hover { filter: brightness(1.1); }
+
+    /* ──────────────────────────────────────────────
+       DASHBOARD GRID: Camera + Stats side by side
+    ────────────────────────────────────────────── */
+    .dashboard-grid {
+      display: grid;
+      grid-template-columns: 1fr 340px;
+      gap: 20px;
+      align-items: start;
+    }
+
+    /* Camera box */
+    .camera-box {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      overflow: hidden;
+    }
+    .camera-header {
+      padding: 12px 16px;
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+    .camera-header .title {
+      font-size: 14px;
+      font-weight: 600;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .camera-feed {
+      position: relative;
+      background: #000;
+      min-height: 360px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    #camera-img {
+      width: 100%;
+      display: block;
+      border-radius: 0 0 0 0;
+    }
+    .camera-placeholder {
+      text-align: center;
+      color: var(--text-dim);
+    }
+    .camera-placeholder .icon { font-size: 48px; margin-bottom: 8px; }
+    .camera-placeholder p { font-size: 14px; }
+
+    /* Line crossing indicator */
+    .line-indicator {
+      position: absolute;
+      top: 50%;
+      left: 0; right: 0;
+      height: 2px;
+      background: rgba(57, 211, 83, 0.5);
+      pointer-events: none;
+    }
+
+    /* ──────────────────────────────────────────────
+       STATS SIDEBAR (right side)
+    ────────────────────────────────────────────── */
+    .stats-sidebar {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+
+    /* Section label inside sidebar */
+    .sidebar-label {
+      font-size: 11px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      color: var(--text-dim);
+      padding: 4px 0 2px;
+    }
+
+    /* Each stat card */
+    .stat-card {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 12px 16px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      transition: border-color 0.3s;
+    }
+    .stat-card:hover { border-color: var(--accent); }
+    .stat-card.highlight { border-color: var(--accent); }
+
+    .stat-left {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .stat-icon {
+      width: 36px; height: 36px;
+      border-radius: 8px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 18px;
+    }
+    .stat-label {
+      font-size: 13px;
+      color: var(--text-muted);
+    }
+    .stat-sub {
+      font-size: 11px;
+      color: var(--text-dim);
+      margin-top: 1px;
+    }
+    .stat-value {
+      font-size: 24px;
+      font-weight: 700;
+      font-family: 'JetBrains Mono', monospace;
+    }
+
+    /* Color themes for stat cards */
+    .color-blue   { background: rgba(31,111,235,0.15); color: var(--accent-2); }
+    .color-pink   { background: rgba(248,81,73,0.15);  color: #ff8080; }
+    .color-cyan   { background: rgba(57,211,83,0.15);  color: var(--cyan); }
+    .color-orange { background: rgba(240,136,62,0.15); color: var(--orange); }
+    .color-purple { background: rgba(163,113,247,0.15);color: var(--purple); }
+    .color-yellow { background: rgba(227,179,65,0.15); color: var(--yellow); }
+    .color-green  { background: rgba(63,185,80,0.15);  color: var(--green); }
+
+    /* Sub-stat (Male / Female inside People) */
+    .sub-stats {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
+    }
+    .sub-stat-card {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 10px 12px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .sub-stat-icon { font-size: 16px; }
+    .sub-stat-info .sub-stat-label { font-size: 11px; color: var(--text-muted); }
+    .sub-stat-info .sub-stat-value {
+      font-size: 18px;
+      font-weight: 700;
+      font-family: 'JetBrains Mono', monospace;
+    }
+
+    /* TOTAL summary cards at bottom */
+    .totals-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
+    }
+    .total-card {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 10px 12px;
+      text-align: center;
+    }
+    .total-card .total-num {
+      font-size: 22px;
+      font-weight: 700;
+      font-family: 'JetBrains Mono', monospace;
+    }
+    .total-card .total-lbl {
+      font-size: 11px;
+      color: var(--text-muted);
+      margin-top: 2px;
+    }
+
+    /* ──────────────────────────────────────────────
+       DAILY REPORT PAGE
+    ────────────────────────────────────────────── */
+    .report-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 20px;
+    }
+    .report-header h2 { font-size: 20px; font-weight: 700; }
+    .report-header .date-badge {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 13px;
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 4px 12px;
+      color: var(--text-muted);
+    }
+
+    .export-bar {
+      display: flex;
+      gap: 10px;
+      margin-bottom: 20px;
+    }
+
+    /* Chart area */
+    .chart-card {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 20px;
+      margin-bottom: 20px;
+    }
+    .chart-title {
+      font-size: 15px;
+      font-weight: 600;
+      margin-bottom: 4px;
+    }
+    .chart-subtitle {
+      font-size: 12px;
+      color: var(--text-muted);
+      margin-bottom: 16px;
+    }
+    .charts-row {
+      display: grid;
+      grid-template-columns: 2fr 1fr;
+      gap: 20px;
+      margin-bottom: 20px;
+    }
+
+    /* Table */
+    .table-card {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      overflow: hidden;
+    }
+    .table-card table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 13px;
+    }
+    .table-card th {
+      background: var(--bg-input);
+      padding: 10px 16px;
+      text-align: left;
+      font-size: 11px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      color: var(--text-muted);
+      border-bottom: 1px solid var(--border);
+    }
+    .table-card td {
+      padding: 10px 16px;
+      border-bottom: 1px solid var(--border);
+      font-family: 'JetBrains Mono', monospace;
+    }
+    .table-card tr:last-child td { border-bottom: none; }
+    .table-card tr:hover td { background: rgba(255,255,255,0.02); }
+
+    /* ──────────────────────────────────────────────
+       NOTIFICATION TOAST
+    ────────────────────────────────────────────── */
+    #toast {
+      position: fixed;
+      bottom: 24px;
+      right: 24px;
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 12px 18px;
+      font-size: 13px;
+      z-index: 9999;
+      transform: translateY(80px);
+      opacity: 0;
+      transition: all 0.3s;
+      max-width: 300px;
+    }
+    #toast.show {
+      transform: translateY(0);
+      opacity: 1;
+    }
+    #toast.success { border-color: var(--green); }
+    #toast.error   { border-color: var(--red); }
+
+    /* ──────────────────────────────────────────────
+       RESPONSIVE
+    ────────────────────────────────────────────── */
+    @media (max-width: 900px) {
+      .dashboard-grid { grid-template-columns: 1fr; }
+      .charts-row     { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+
+<body>
+
+<!-- ═══════════════════════════════════════════
+     HEADER
+═══════════════════════════════════════════ -->
+<header>
+  <div class="logo">
+    <div class="logo-dot"></div>
+    ObjectSense
+  </div>
+
+  <nav>
+    <button class="nav-btn active" onclick="showPage('dashboard')">📊 Dashboard</button>
+    <button class="nav-btn"        onclick="showPage('report')">📋 Daily Report</button>
+  </nav>
+
+  <div class="header-status">
+    <div class="status-dot" id="status-dot"></div>
+    <span id="status-text">Offline</span>
+  </div>
+</header>
+
+<!-- ═══════════════════════════════════════════
+     MAIN CONTENT
+═══════════════════════════════════════════ -->
+<main>
+
+  <!-- ── TOAST NOTIFICATION ── -->
+  <div id="toast"></div>
+
+  <!-- ══════════════════════════════════════
+       PAGE 1: LIVE DASHBOARD
+  ══════════════════════════════════════ -->
+  <div class="page active" id="page-dashboard">
+
+    <!-- Camera connect controls -->
+    <div class="connect-bar">
+      <label>📷 Camera URL:</label>
+      <input type="text" id="camera-url"
+             placeholder="e.g. http://192.168.1.100:8080/video  or  0 for webcam  or  leave blank for simulation"
+             value="" />
+      <button class="btn btn-primary" onclick="startCamera()">▶ Start</button>
+      <button class="btn btn-danger"  onclick="stopCamera()">■ Stop</button>
+      <button class="btn btn-ghost"   onclick="resetCounts()">↺ Reset</button>
+    </div>
+
+    <!-- Main grid: Camera left, Stats right -->
+    <div class="dashboard-grid">
+
+      <!-- Camera Feed -->
+      <div class="camera-box">
+        <div class="camera-header">
+          <span class="title">📡 Live Feed</span>
+          <span id="cam-label" style="font-size:12px; color:var(--text-muted)">Not started</span>
+        </div>
+        <div class="camera-feed" id="camera-feed-area">
+          <div class="camera-placeholder" id="cam-placeholder">
+            <div class="icon">📷</div>
+            <p>Enter a camera URL and click Start</p>
+            <p style="margin-top:6px; font-size:12px; color:var(--text-dim)">
+              Leave blank for simulation mode
+            </p>
+          </div>
+          <img id="camera-img" src="" alt="" style="display:none;" />
+        </div>
+      </div>
+
+      <!-- Stats Sidebar -->
+      <div class="stats-sidebar">
+
+        <!-- PEOPLE section -->
+        <div class="sidebar-label">👥 People</div>
+
+        <!-- Male / Female side by side -->
+        <div class="sub-stats">
+          <div class="sub-stat-card">
+            <div class="sub-stat-icon">👨</div>
+            <div class="sub-stat-info">
+              <div class="sub-stat-label">Male</div>
+              <div class="sub-stat-value color-blue" id="cnt-male">0</div>
+            </div>
+          </div>
+          <div class="sub-stat-card">
+            <div class="sub-stat-icon">👩</div>
+            <div class="sub-stat-info">
+              <div class="sub-stat-label">Female</div>
+              <div class="sub-stat-value color-pink" id="cnt-female">0</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- VEHICLES section -->
+        <div class="sidebar-label">🚗 Vehicles</div>
+
+        <div class="stat-card">
+          <div class="stat-left">
+            <div class="stat-icon color-cyan">🚗</div>
+            <div>
+              <div class="stat-label">Cars</div>
+            </div>
+          </div>
+          <div class="stat-value" id="cnt-car">0</div>
+        </div>
+
+        <div class="stat-card">
+          <div class="stat-left">
+            <div class="stat-icon color-orange">🏍️</div>
+            <div>
+              <div class="stat-label">Motorcycles</div>
+            </div>
+          </div>
+          <div class="stat-value" id="cnt-moto">0</div>
+        </div>
+
+        <div class="stat-card">
+          <div class="stat-left">
+            <div class="stat-icon color-purple">🚛</div>
+            <div>
+              <div class="stat-label">Trucks</div>
+            </div>
+          </div>
+          <div class="stat-value" id="cnt-truck">0</div>
+        </div>
+
+        <!-- OBJECTS section -->
+        <div class="sidebar-label">📦 Objects</div>
+
+        <div class="stat-card">
+          <div class="stat-left">
+            <div class="stat-icon color-yellow">📦</div>
+            <div>
+              <div class="stat-label">Common Objects</div>
+              <div class="stat-sub">cups, chairs, etc.</div>
+            </div>
+          </div>
+          <div class="stat-value" id="cnt-obj">0</div>
+        </div>
+
+        <!-- TOTALS section -->
+        <div class="sidebar-label">📈 Totals</div>
+
+        <div class="totals-grid">
+          <div class="total-card">
+            <div class="total-num" id="tot-people" style="color:var(--accent-2)">0</div>
+            <div class="total-lbl">Total People</div>
+          </div>
+          <div class="total-card">
+            <div class="total-num" id="tot-cars" style="color:var(--cyan)">0</div>
+            <div class="total-lbl">Total Cars</div>
+          </div>
+          <div class="total-card">
+            <div class="total-num" id="tot-motos" style="color:var(--orange)">0</div>
+            <div class="total-lbl">Total Motorcycles</div>
+          </div>
+          <div class="total-card">
+            <div class="total-num" id="tot-trucks" style="color:var(--purple)">0</div>
+            <div class="total-lbl">Total Trucks</div>
+          </div>
+          <div class="total-card" style="grid-column: span 2;">
+            <div class="total-num" id="tot-objs" style="color:var(--yellow)">0</div>
+            <div class="total-lbl">Total Objects</div>
+          </div>
+        </div>
+
+      </div><!-- end stats-sidebar -->
+    </div><!-- end dashboard-grid -->
+  </div><!-- end page-dashboard -->
+
+
+  <!-- ══════════════════════════════════════
+       PAGE 2: DAILY REPORT
+  ══════════════════════════════════════ -->
+  <div class="page" id="page-report">
+
+    <div class="report-header">
+      <h2>📋 Daily Report</h2>
+      <span class="date-badge" id="report-date">Loading...</span>
+    </div>
+
+    <!-- Export buttons -->
+    <div class="export-bar">
+      <button class="btn btn-success" onclick="exportCSV()">⬇ Export CSV</button>
+      <button class="btn btn-ghost"   onclick="exportExcel()">⬇ Export Excel</button>
+      <button class="btn btn-ghost"   onclick="loadReport()">🔄 Refresh</button>
+    </div>
+
+    <!-- Charts row: Bar chart + Pie chart -->
+    <div class="charts-row">
+
+      <!-- Bar / Line chart — hourly breakdown -->
+      <div class="chart-card">
+        <div class="chart-title">Hourly Detection Count</div>
+        <div class="chart-subtitle">Number of objects detected per hour today</div>
+        <canvas id="bar-chart" height="200"></canvas>
+      </div>
+
+      <!-- Pie chart — category distribution -->
+      <div class="chart-card">
+        <div class="chart-title">Category Distribution</div>
+        <div class="chart-subtitle">Breakdown of detected object types</div>
+        <canvas id="pie-chart" height="200"></canvas>
+      </div>
+
+    </div>
+
+    <!-- Data table -->
+    <div class="table-card">
+      <table>
+        <thead>
+          <tr>
+            <th>Hour</th>
+            <th>Males</th>
+            <th>Females</th>
+            <th>Total People</th>
+            <th>Cars</th>
+            <th>Motorcycles</th>
+            <th>Trucks</th>
+            <th>Objects</th>
+          </tr>
+        </thead>
+        <tbody id="report-table-body">
+          <tr>
+            <td colspan="8" style="text-align:center; color:var(--text-dim); padding:30px">
+              No data yet. Start the camera to begin counting.
+            </td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+  </div><!-- end page-report -->
+
+</main>
+
+<!-- ═══════════════════════════════════════════
+     JAVASCRIPT
+═══════════════════════════════════════════ -->
+<script>
+// ─── Configuration ────────────────────────────────────────────────────────────
+// Change this if your backend runs on a different address
+const BACKEND = "http://localhost:5000";
+
+// ─── Page Navigation ──────────────────────────────────────────────────────────
+function showPage(name) {
+  // Hide all pages
+  document.querySelectorAll(".page").forEach(p => p.classList.remove("active"));
+  document.querySelectorAll(".nav-btn").forEach(b => b.classList.remove("active"));
+
+  // Show selected page
+  document.getElementById("page-" + name).classList.add("active");
+  event.target.classList.add("active");
+
+  // Load report data when switching to report page
+  if (name === "report") loadReport();
+}
+
+// ─── Toast Notification ───────────────────────────────────────────────────────
+function showToast(msg, type = "success") {
+  const toast = document.getElementById("toast");
+  toast.textContent = msg;
+  toast.className   = `show ${type}`;
+  setTimeout(() => { toast.className = ""; }, 3000);
+}
+
+// ─── Camera Controls ──────────────────────────────────────────────────────────
+async function startCamera() {
+  const url = document.getElementById("camera-url").value.trim();
+
+  try {
+    const res  = await fetch(`${BACKEND}/api/start-camera`, {
+      method:  "POST",
+      headers: { "Content-Type": "application/json" },
+      body:    JSON.stringify({ url: url || "SIM" })   // SIM = simulation mode
+    });
+    const data = await res.json();
+
+    if (res.ok) {
+      // Show the camera stream
+      const img = document.getElementById("camera-img");
+      img.src   = `${BACKEND}/video-feed`;
+      img.style.display = "block";
+      document.getElementById("cam-placeholder").style.display = "none";
+
+      // Update status
+      document.getElementById("status-dot").classList.add("live");
+      document.getElementById("status-text").textContent = data.mode === "real" ? "Live" : "Simulation";
+      document.getElementById("cam-label").textContent   = data.mode === "real" ? "Connected" : "Simulation Mode";
+
+      showToast("✅ Camera started");
+    } else {
+      showToast("❌ " + data.error, "error");
+    }
+  } catch (err) {
+    showToast("❌ Cannot connect to backend. Is it running?", "error");
+    console.error(err);
+  }
+}
+
+async function stopCamera() {
+  try {
+    await fetch(`${BACKEND}/api/stop-camera`, { method: "POST" });
+    document.getElementById("camera-img").style.display = "none";
+    document.getElementById("cam-placeholder").style.display = "block";
+    document.getElementById("status-dot").classList.remove("live");
+    document.getElementById("status-text").textContent = "Offline";
+    document.getElementById("cam-label").textContent   = "Not started";
+    showToast("⏹ Camera stopped");
+  } catch (err) {
+    showToast("❌ Error stopping camera", "error");
+  }
+}
+
+async function resetCounts() {
+  try {
+    await fetch(`${BACKEND}/api/reset`, { method: "POST" });
+    // Reset display
+    ["cnt-male","cnt-female","cnt-car","cnt-moto","cnt-truck","cnt-obj",
+     "tot-people","tot-cars","tot-motos","tot-trucks","tot-objs"]
+      .forEach(id => document.getElementById(id).textContent = "0");
+    showToast("↺ Counts reset");
+  } catch (err) {
+    showToast("❌ Error resetting", "error");
+  }
+}
+
+// ─── Live Count Polling ───────────────────────────────────────────────────────
+// Every second, ask the backend for latest counts and update the dashboard
+function pollCounts() {
+  fetch(`${BACKEND}/api/counts`)
+    .then(r => r.json())
+    .then(data => {
+      // Update each counter
+      document.getElementById("cnt-male").textContent   = data.males;
+      document.getElementById("cnt-female").textContent = data.females;
+      document.getElementById("cnt-car").textContent    = data.cars;
+      document.getElementById("cnt-moto").textContent   = data.motorcycles;
+      document.getElementById("cnt-truck").textContent  = data.trucks;
+      document.getElementById("cnt-obj").textContent    = data.objects;
+
+      // Update totals
+      document.getElementById("tot-people").textContent = data.total_people;
+      document.getElementById("tot-cars").textContent   = data.cars;
+      document.getElementById("tot-motos").textContent  = data.motorcycles;
+      document.getElementById("tot-trucks").textContent = data.trucks;
+      document.getElementById("tot-objs").textContent   = data.objects;
+    })
+    .catch(() => {}); // Silently ignore if backend is offline
+}
+
+setInterval(pollCounts, 1000);  // Poll every 1 second
+pollCounts();                   // Also poll immediately on load
+
+// ─── Daily Report ─────────────────────────────────────────────────────────────
+let barChart = null;
+let pieChart = null;
+
+async function loadReport() {
+  // Show today's date
+  const today = new Date().toLocaleDateString("en-IN", {
+    weekday: "long", year: "numeric", month: "long", day: "numeric"
+  });
+  document.getElementById("report-date").textContent = today;
+
+  try {
+    const res  = await fetch(`${BACKEND}/api/daily-report`);
+    const data = await res.json();
+    renderCharts(data);
+    renderTable(data);
+  } catch (err) {
+    showToast("❌ Cannot load report. Is backend running?", "error");
+  }
+}
+
+function renderCharts(data) {
+  const hourly = data.hourly;
+
+  // ── Bar/Line Chart: hourly people count ──────────────────────────────────
+  const labels = hourly.map(h => h.label);
+
+  const barCtx = document.getElementById("bar-chart").getContext("2d");
+  if (barChart) barChart.destroy();
+
+  barChart = new Chart(barCtx, {
+    type: "bar",
+    data: {
+      labels,
+      datasets: [
+        {
+          label:           "People",
+          data:            hourly.map(h => h.total_people),
+          backgroundColor: "rgba(56, 139, 253, 0.7)",
+          borderColor:     "#388bfd",
+          borderWidth:     1,
+          borderRadius:    4,
+        },
+        {
+          label:           "Cars",
+          data:            hourly.map(h => h.cars),
+          backgroundColor: "rgba(57, 211, 83, 0.7)",
+          borderColor:     "#39d353",
+          borderWidth:     1,
+          borderRadius:    4,
+        },
+        {
+          label:           "Motorcycles",
+          data:            hourly.map(h => h.motorcycles),
+          backgroundColor: "rgba(240, 136, 62, 0.7)",
+          borderColor:     "#f0883e",
+          borderWidth:     1,
+          borderRadius:    4,
+        },
+        {
+          label:           "Trucks",
+          data:            hourly.map(h => h.trucks),
+          backgroundColor: "rgba(163, 113, 247, 0.7)",
+          borderColor:     "#a371f7",
+          borderWidth:     1,
+          borderRadius:    4,
+        },
+      ]
+    },
+    options: {
+      responsive:         true,
+      maintainAspectRatio: true,
+      plugins: {
+        legend: {
+          labels: { color: "#8b949e", font: { size: 12 } }
+        }
+      },
+      scales: {
+        x: {
+          ticks:  { color: "#8b949e" },
+          grid:   { color: "#21262d" }
+        },
+        y: {
+          ticks:  { color: "#8b949e" },
+          grid:   { color: "#21262d" },
+          beginAtZero: true
+        }
+      }
+    }
+  });
+
+  // ── Pie Chart: total category distribution ────────────────────────────────
+  // Sum all hours
+  const totals = {
+    males:       hourly.reduce((s, h) => s + h.males, 0),
+    females:     hourly.reduce((s, h) => s + h.females, 0),
+    cars:        hourly.reduce((s, h) => s + h.cars, 0),
+    motorcycles: hourly.reduce((s, h) => s + h.motorcycles, 0),
+    trucks:      hourly.reduce((s, h) => s + h.trucks, 0),
+    objects:     hourly.reduce((s, h) => s + h.objects, 0),
+  };
+
+  const pieCtx = document.getElementById("pie-chart").getContext("2d");
+  if (pieChart) pieChart.destroy();
+
+  pieChart = new Chart(pieCtx, {
+    type: "doughnut",
+    data: {
+      labels: ["Males", "Females", "Cars", "Motorcycles", "Trucks", "Objects"],
+      datasets: [{
+        data: [
+          totals.males, totals.females,
+          totals.cars, totals.motorcycles,
+          totals.trucks, totals.objects
+        ],
+        backgroundColor: [
+          "#388bfd", "#ff8080",
+          "#39d353", "#f0883e",
+          "#a371f7", "#e3b341"
+        ],
+        borderColor: "#161b22",
+        borderWidth: 3,
+      }]
+    },
+    options: {
+      responsive:         true,
+      maintainAspectRatio: true,
+      cutout: "55%",   // Makes it a donut chart (looks better than plain pie)
+      plugins: {
+        legend: {
+          position: "bottom",
+          labels: {
+            color:   "#8b949e",
+            padding: 12,
+            font:    { size: 11 }
+          }
+        }
+      }
+    }
+  });
+}
+
+function renderTable(data) {
+  const tbody = document.getElementById("report-table-body");
+
+  if (!data.hourly || data.hourly.length === 0) {
+    tbody.innerHTML = `
+      <tr>
+        <td colspan="8" style="text-align:center; color:var(--text-dim); padding:30px">
+          No data yet. Start the camera to begin counting.
+        </td>
+      </tr>`;
+    return;
+  }
+
+  tbody.innerHTML = data.hourly.map(h => `
+    <tr>
+      <td>${h.label}</td>
+      <td>${h.males}</td>
+      <td>${h.females}</td>
+      <td style="color:var(--accent-2); font-weight:600">${h.total_people}</td>
+      <td>${h.cars}</td>
+      <td>${h.motorcycles}</td>
+      <td>${h.trucks}</td>
+      <td>${h.objects}</td>
+    </tr>
+  `).join("");
+}
+
+// ─── Export Functions ─────────────────────────────────────────────────────────
+function exportCSV() {
+  // Opens the CSV download directly
+  window.location.href = `${BACKEND}/api/export-csv`;
+  showToast("⬇ Downloading CSV...");
+}
+
+function exportExcel() {
+  window.location.href = `${BACKEND}/api/export-excel`;
+  showToast("⬇ Downloading Excel...");
+}
+</script>
+
+</body>
+</html>
