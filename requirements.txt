@@ -1,0 +1,9 @@
+# Real-Time Object Counting System - Python Requirements
+# Install all at once with: pip install -r requirements.txt
+
+flask==3.0.0           # Web server framework
+flask-cors==4.0.0      # Allow frontend to talk to backend
+opencv-python==4.9.0.80  # Camera capture and image processing
+ultralytics==8.1.0     # YOLOv8 object detection
+openpyxl==3.1.2        # Excel file export
+numpy==1.26.4          # Math library (used by OpenCV and YOLO)
